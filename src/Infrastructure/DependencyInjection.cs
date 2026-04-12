@@ -32,16 +32,16 @@ public static class DependencyInjection
         services.AddScoped<IRepository<Domain.Entities.Product, Guid>, SqlProductRepository>();
         
         // Configure MongoDB settings
-        var mongoDbSettings = configuration.GetSection("MongoDBSettings").Get<MongoDbSettings>()
-            ?? throw new InvalidOperationException("MongoDBSettings configuration section is missing or invalid");
+        //var mongoDbSettings = configuration.GetSection("MongoDBSettings").Get<MongoDbSettings>()
+        //    ?? throw new InvalidOperationException("MongoDBSettings configuration section is missing or invalid");
         
         // Register MongoDB context with settings
-        services.AddSingleton<MongoDbContext>(_ => 
-            new MongoDbContext(Options.Create(mongoDbSettings)));
+        //services.AddSingleton<MongoDbContext>(_ => 
+        //    new MongoDbContext(Options.Create(mongoDbSettings)));
         
         // Register MongoDB Category Repository
-        services.AddScoped<IRepository<Domain.Entities.Category, string>>(sp => 
-            new MongoCategoryRepository(sp.GetRequiredService<MongoDbContext>()));
+        //services.AddScoped<IRepository<Domain.Entities.Category, string>>(sp => 
+        //    new MongoCategoryRepository(sp.GetRequiredService<MongoDbContext>()));
 
         return services;
     }
