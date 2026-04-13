@@ -31,9 +31,9 @@ services:
       - mssql_log:${MSSQL_LOG_DIR}
       - mssql_backup:${MSSQL_BACKUP_DIR}
       - ./init-sql:/docker-entrypoint-initdb.d  # For initialization scripts
-    tmpfs:
-      - /var/opt/mssql/data
-      - /var/opt/mssql/log
+    # tmpfs:
+    #   - /var/opt/mssql/data
+    #   - /var/opt/mssql/log
     networks:
       - app_network
     healthcheck:
