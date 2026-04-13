@@ -24,6 +24,12 @@ Este repositorio contiene una configuración optimizada de Docker Compose para e
    ```bash
    cp .env.example .env
    ```
+   En el archivo `docker-compose.yml` deberas comentarear estas lineas para que pueda crear los contenedores: 
+   ```bash
+    tmpfs:
+       - /var/opt/mssql/data
+       - /var/opt/mssql/log
+   ```
 
 2. Edita el archivo `.env` para configurar usuarios y contraseñas seguras. Las variables más importantes son:
    ```env
