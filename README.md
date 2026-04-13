@@ -31,7 +31,7 @@ Este repositorio contiene una configuración optimizada de Docker Compose para e
        - /var/opt/mssql/log
    ```
 
-2. Edita el archivo `.env` para configurar usuarios y contraseñas seguras. Las variables más importantes son:
+2. Edita el archivo `.env` para configurar usuarios y contraseñas seguras, asegurate que concuerden con las que escribas en el archivo appsettings.json, de lo contrario no podras authenticarte. Las variables más importantes son:
    ```env
    # MongoDB
    MONGO_INITDB_ROOT_USERNAME=admin
