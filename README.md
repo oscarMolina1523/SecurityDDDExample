@@ -66,7 +66,7 @@ docker-compose down
 ### Acceder a MongoDB Shell
 
 ```bash
-docker exec -it mongosh mongosh -u admin -p admin123 --authenticationDatabase admin
+docker exec -it mongodb mongosh -u admin -p admin123 --authenticationDatabase admin
 ```
 
 ## Configuración de la Aplicación

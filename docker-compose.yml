@@ -17,19 +17,21 @@ services:
     image: mcr.microsoft.com/mssql/server:2022-latest
     container_name: sqlserver
     restart: unless-stopped
-    user: root
+    user: "0:0"
     environment:
       - ACCEPT_EULA=${MSSQL_ACCEPT_EULA}
-      - MSSQL_SA_PASSWORD=${MSSQL_SA_PASSWORD}
-      - MSSQL_PID=${MSSQL_PID}
-      - MSSQL_TCP_PORT=${MSSQL_TCP_PORT}
+      - SA_PASSWORD=${MSSQL_SA_PASSWORD}
+      - MSSQL_PID=${MSSQL_PID:-Developer}
+      - MSSQL_DATA_DIR=${MSSQL_DATA_DIR}
+      - MSSQL_LOG_DIR=${MSSQL_LOG_DIR}
+      - MSSQL_BACKUP_DIR=${MSSQL_BACKUP_DIR}
     ports:
-      - "${MSSQL_TCP_PORT}:${MSSQL_TCP_PORT}"
-      - "${MSSQL_SSMS_PORT}:1434"  # For SSMS connection
+      - "${SQL_SERVER_PORT:-1433}:1433"
     volumes:
       - mssql_data:${MSSQL_DATA_DIR}
       - mssql_log:${MSSQL_LOG_DIR}
       - mssql_backup:${MSSQL_BACKUP_DIR}
+
       - ./init-sql:/docker-entrypoint-initdb.d  # For initialization scripts
     # tmpfs:
     #   - /var/opt/mssql/data
@@ -37,27 +39,19 @@ services:
     networks:
       - app_network
     healthcheck:
-      test: ["CMD", "/opt/mssql-tools/bin/sqlcmd", "-S", "localhost", "-U", "sa", "-P", "${MSSQL_SA_PASSWORD}", "-Q", "SELECT 1"]
-      interval: 10s
-      timeout: 3s
-      retries: 10
-      start_period: 20s
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P ${MSSQL_SA_PASSWORD} -C -Q 'SELECT 1' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
     deploy:
       resources:
         limits:
-          cpus: '${MSSQL_CPU_LIMIT:-2}'
-          memory: ${MSSQL_MEMORY_LIMIT:-4G}
+          memory: 4G
+          cpus: '2.0'
         reservations:
-          cpus: '${MSSQL_CPU_RESERVATION:-1}'
-          memory: ${MSSQL_MEMORY_RESERVATION:-2G}
-    ulimits:
-      nproc: 64000
-      nofile:
-        soft: 64000
-        hard: 64000
-    sysctls:
-      - net.core.somaxconn=4096
-      - net.ipv4.tcp_keepalive_time=300
+          memory: 2G
+          cpus: '1.0'
   
   # Servicio principal de MongoDB
   mongodb:
