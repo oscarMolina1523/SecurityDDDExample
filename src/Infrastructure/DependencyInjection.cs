@@ -43,6 +43,13 @@ public static class DependencyInjection
         services.AddScoped<IRepository<Domain.Entities.Category, string>>(sp =>
             new MongoCategoryRepository(sp.GetRequiredService<MongoDbContext>()));
 
+        // Configure JWT settings
+        var jwtSettings = configuration.GetSection("Authentication:Jwt").Get<JwtSettings>();
+        if (jwtSettings != null)
+        {
+            services.Configure<JwtSettings>(configuration.GetSection("Authentication:Jwt"));
+        }
+
         return services;
     }
 }
