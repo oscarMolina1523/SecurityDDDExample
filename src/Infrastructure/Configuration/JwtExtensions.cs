@@ -4,6 +4,10 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using DDDExample.Application.Common;
+using DDDExample.Infrastructure.Persistence.SqlServer;
 
 namespace DDDExample.Infrastructure.Configuration;
 

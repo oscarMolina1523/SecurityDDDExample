@@ -1,7 +1,6 @@
 using DDDExample.Application.DTOs;
 using DDDExample.Application.Interfaces;
 using DDDExample.Domain.Entities;
-using DDDExample.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Identity;
 
 namespace DDDExample.Application.Services;
