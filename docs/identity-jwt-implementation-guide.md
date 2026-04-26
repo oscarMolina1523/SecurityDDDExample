@@ -35,13 +35,63 @@ Esta guía implementa autenticación basada en tokens JWT utilizando ASP.NET Cor
 - Visual Studio 2022 o VS Code
 
 ### Dependencias NuGet
+Asegurate de tener los siguientes paquetes Nugets instalados en las capas correspondientes, si ya tienes instaladas algunas omitelas y solo
+instala las faltantes
+
+DDDExample.API
 ```xml
-<PackageReference Include="Microsoft.AspNetCore.Identity" Version="8.0.0" />
-<PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="8.0.0" />
-<PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.0" />
-<PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="8.0.0" />
-<PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="8.0.0" />
-<PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="7.0.0" />
+        <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="8.0.0" />
+		<PackageReference Include="Swashbuckle.AspNetCore" Version="6.5.0" />
+		<PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.0" />
+		<PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="8.0.0">
+```
+
+DDDExample.Application
+```xml
+        <PackageReference Include="AutoMapper" Version="13.0.1" />
+		<PackageReference Include="Microsoft.IdentityModel.Tokens" Version="8.0.0" />
+		<PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.0.0" />
+```
+
+DDDExample.Infrastructure
+```xml
+        <PackageReference Include="Microsoft.Extensions.Configuration" Version="8.0.0" />
+		<PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="8.0.0" />
+		<PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="6.0.0" />
+		<PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="8.0.0" />
+		<PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="8.0.0" />
+		<PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="8.0.0" />
+		<PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="8.0.0" />
+		<PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="8.0.0" />
+		<PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.0" />
+		<PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="8.0.0" />
+		<PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.0.0" />
+		<PackageReference Include="MongoDB.Driver" Version="2.22.0" />
+		<PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.0">
+```
+## Dependencias de capas
+Asegurate de tener un apartado similar a este y verificar que tienes las dependencias correctas, de lo contrario agregarlas
+
+DDDExample.API
+```xml
+       <ItemGroup>
+		    <ProjectReference Include="..\DDDExample.Application\DDDExample.Application.csproj" />
+		    <ProjectReference Include="..\Infrastructure\DDDExample.Infrastructure.csproj" />
+	    </ItemGroup>
+```
+
+DDDExample.Application
+```xml
+        <ItemGroup>
+		    <ProjectReference Include="..\Domain\DDDExample.Domain.csproj" />
+	    </ItemGroup>
+```
+
+DDDExample.Infrastructure
+```xml
+        <ItemGroup>
+	      <ProjectReference Include="..\DDDExample.Application\DDDExample.Application.csproj" />
+	    </ItemGroup>
 ```
 
 ## Setup de Rama
@@ -86,6 +136,8 @@ Domain/
     ApplicationUser.cs
     ApplicationRole.cs
 Application/
+  Common/
+    JwtSettings.cs
   DTOs/
     LoginRequest.cs
     LoginResponse.cs
@@ -99,9 +151,9 @@ Application/
     JwtTokenService.cs
 Infrastructure/
   Persistence/
-    ApplicationDbContext.cs
+    sqlServer/
+        ApplicationDbContext.cs
   Configuration/
-    JwtSettings.cs
     JwtExtensions.cs
 DDDExample.API/
   Controllers/
@@ -122,7 +174,7 @@ public class ApplicationUser : IdentityUser<Guid>
     public string LastName { get; private set; } = string.Empty;
     public DateTime CreatedAt { get; private set; }
     public DateTime? LastLoginAt { get; private set; }
-    
+
     public string FullName => $"{FirstName} {LastName}";
 
     // For EF Core
@@ -170,13 +222,13 @@ public class ApplicationRole : IdentityRole<Guid>
 
 #### JwtSettings.cs
 ```csharp
-namespace DDDExample.Infrastructure.Configuration;
+namespace DDDExample.Application.Common;
 
 public class JwtSettings
 {
+    public string SecretKey { get; set; } = string.Empty;
     public string Issuer { get; set; } = string.Empty;
     public string Audience { get; set; } = string.Empty;
-    public string SecretKey { get; set; } = string.Empty;
     public int ExpirationMinutes { get; set; } = 60;
 }
 ```
@@ -189,6 +241,10 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using DDDExample.Application.Common;
+using DDDExample.Infrastructure.Persistence.SqlServer;
 
 namespace DDDExample.Infrastructure.Configuration;
 
@@ -197,7 +253,7 @@ public static class JwtExtensions
     public static IServiceCollection AddJwtAuthentication(this IServiceCollection services, IConfiguration configuration)
     {
         var jwtSettings = configuration.GetSection("Authentication:Jwt").Get<JwtSettings>();
-        
+
         services.AddIdentity<ApplicationUser, ApplicationRole>(options =>
         {
             options.Password.RequiredLength = 8;
@@ -248,7 +304,7 @@ public class LoginRequest
     [Required(ErrorMessage = "Email is required")]
     [EmailAddress(ErrorMessage = "Invalid email format")]
     public string Email { get; set; } = string.Empty;
-    
+
     [Required(ErrorMessage = "Password is required")]
     [MinLength(6, ErrorMessage = "Password must be at least 6 characters")]
     public string Password { get; set; } = string.Empty;
@@ -266,13 +322,6 @@ public class LoginResponse
     public UserDto User { get; set; } = new();
 }
 
-public class UserDto
-{
-    public Guid Id { get; set; }
-    public string Email { get; set; } = string.Empty;
-    public string FullName { get; set; } = string.Empty;
-    public DateTime CreatedAt { get; set; }
-}
 ```
 
 #### RegisterRequest.cs
@@ -286,14 +335,14 @@ public class RegisterRequest
     [Required(ErrorMessage = "Email is required")]
     [EmailAddress(ErrorMessage = "Invalid email format")]
     public string Email { get; set; } = string.Empty;
-    
+
     [Required(ErrorMessage = "Password is required")]
     [MinLength(8, ErrorMessage = "Password must be at least 8 characters")]
     public string Password { get; set; } = string.Empty;
-    
+
     [Required(ErrorMessage = "First name is required")]
     public string FirstName { get; set; } = string.Empty;
-    
+
     [Required(ErrorMessage = "Last name is required")]
     public string LastName { get; set; } = string.Empty;
 }
@@ -329,12 +378,13 @@ public interface ITokenService
 ```csharp
 using DDDExample.Application.Interfaces;
 using DDDExample.Domain.Entities;
-using DDDExample.Infrastructure.Configuration;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
+using DDDExample.Application.Common; 
+using DDDExample.Domain.Entities;
 
 namespace DDDExample.Application.Services;
 
@@ -392,7 +442,6 @@ public interface IAuthService
 using DDDExample.Application.DTOs;
 using DDDExample.Application.Interfaces;
 using DDDExample.Domain.Entities;
-using DDDExample.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Identity;
 
 namespace DDDExample.Application.Services;
@@ -552,7 +601,7 @@ using DDDExample.Domain.Entities;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
-namespace DDDExample.Infrastructure.Persistence;
+namespace DDDExample.Infrastructure.Persistence.SqlServer;
 
 public class ApplicationDbContext : IdentityDbContext<ApplicationUser, ApplicationRole, Guid>
 {
@@ -561,17 +610,41 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser, Applicati
     {
     }
 
-    protected override void OnModelCreating(ModelBuilder builder)
+    public DbSet<Product> Products { get; set; } = null!;
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        base.OnModelCreating(builder);
-        
-        builder.Entity<ApplicationUser>(entity =>
+        base.OnModelCreating(modelBuilder);
+
+        modelBuilder.Entity<ApplicationUser>(entity =>
         {
             entity.Property(e => e.FirstName).HasMaxLength(100);
             entity.Property(e => e.LastName).HasMaxLength(100);
         });
+        
+        modelBuilder.Entity<Product>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            
+            entity.Property(e => e.Name)
+                .IsRequired()
+                .HasMaxLength(200);
+                
+            entity.Property(e => e.Description)
+                .IsRequired()
+                .HasMaxLength(1000);
+                
+            entity.Property(e => e.Price)
+                .HasColumnType("decimal(18,2)");
+                
+            entity.Property(e => e.CreatedAt)
+                .IsRequired();
+                
+            entity.HasIndex(e => e.Name);
+        });
     }
 }
+
 ```
 
 ## Configuración
@@ -580,13 +653,17 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser, Applicati
 
 ```csharp
 using DDDExample.Application.Interfaces;
-using DDDExample.Application.Services;
 using DDDExample.Application.Mappings;
+using DDDExample.Application.Services;
 using DDDExample.Infrastructure;
-using DDDExample.Infrastructure.Configuration;
+using DDDExample.Infrastructure.Persistence.SqlServer;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi.Models;
 using System.Reflection;
 using System.Text.Json.Serialization;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using System;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -606,7 +683,7 @@ builder.Services.AddSwaggerGen(options =>
     {
         Title = "DDD Example API",
         Version = "v1",
-        Description = "A clean architecture example with DDD and JWT authentication"
+        Description = "A clean architecture example with DDD"
     });
     
     var xmlFile = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
@@ -621,11 +698,8 @@ builder.Services.AddSwaggerGen(options =>
 // Add AutoMapper
 builder.Services.AddAutoMapper(typeof(MappingProfile));
 
-// Add infrastructure services (includes ApplicationDbContext and JWT settings)
+// Add infrastructure services
 builder.Services.AddInfrastructure(builder.Configuration);
-
-// Add JWT authentication
-builder.Services.AddJwtAuthentication(builder.Configuration);
 
 // Register application services
 builder.Services.AddScoped<IProductService, ProductService>();
@@ -673,9 +747,11 @@ app.UseHttpsRedirection();
 app.UseRouting();
 app.UseAuthentication();
 app.UseAuthorization();
+
 app.MapControllers();
 
 app.Run();
+
 ```
 
 ### 2. Actualizar DependencyInjection.cs
@@ -685,17 +761,18 @@ Actualizar el archivo `src/Infrastructure/DependencyInjection.cs` para incluir l
 ```csharp
 using DDDExample.Application.Interfaces;
 using DDDExample.Application.Services;
-using DDDExample.Application.Mappings;
 using DDDExample.Domain.Repositories;
 using DDDExample.Infrastructure.Persistence.MongoDB;
 using DDDExample.Infrastructure.Persistence.SqlServer;
 using DDDExample.Infrastructure.Repositories.MongoDB;
 using DDDExample.Infrastructure.Repositories.SqlServer;
-using DDDExample.Infrastructure.Configuration;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using DDDExample.Application.Common;
+using Microsoft.AspNetCore.Identity;
+using DDDExample.Domain.Entities;
 
 namespace DDDExample.Infrastructure;
 
@@ -714,20 +791,24 @@ public static class DependencyInjection
             options.UseSqlServer(
                 sqlServerSettings.ConnectionString,
                 b => b.MigrationsAssembly(typeof(ApplicationDbContext).Assembly.FullName)));
-        
+
+        services.AddIdentity<ApplicationUser, ApplicationRole>()
+        .AddEntityFrameworkStores<ApplicationDbContext>()
+        .AddDefaultTokenProviders();
+
         // Register SQL Server Product Repository
         services.AddScoped<IRepository<Domain.Entities.Product, Guid>, SqlProductRepository>();
-        
+
         // Configure MongoDB settings
         var mongoDbSettings = configuration.GetSection("MongoDBSettings").Get<MongoDbSettings>()
             ?? throw new InvalidOperationException("MongoDBSettings configuration section is missing or invalid");
-        
+
         // Register MongoDB context with settings
-        services.AddSingleton<MongoDbContext>(_ => 
+        services.AddSingleton<MongoDbContext>(_ =>
             new MongoDbContext(Options.Create(mongoDbSettings)));
-        
+
         // Register MongoDB Category Repository
-        services.AddScoped<IRepository<Domain.Entities.Category, string>>(sp => 
+        services.AddScoped<IRepository<Domain.Entities.Category, string>>(sp =>
             new MongoCategoryRepository(sp.GetRequiredService<MongoDbContext>()));
 
         // Configure JWT settings
@@ -740,6 +821,7 @@ public static class DependencyInjection
         return services;
     }
 }
+
 ```
 
 ### 3. appsettings.json
@@ -754,16 +836,16 @@ public static class DependencyInjection
   },
   "AllowedHosts": "*",
   "ConnectionStrings": {
-    "MongoDB": "mongodb://admin:4xFW6B@0jh@localhost:27017/mydb?authSource=admin",
-    "SQLServer": "Server=172.30.0.2,1433;Database=mydb;User Id=sa;Password=4xFW6B@0jh;TrustServerCertificate=True;"
+    "MongoDB": "mongodb://admin:admin123@localhost:27017/mydb?authSource=admin",
+    "SQLServer": "Server=localhost,1433;Database=mydb;User Id=sa;Password=SqlPassword2026!;TrustServerCertificate=True;"
   },
   "MongoDBSettings": {
-    "ConnectionString": "mongodb://admin:4xFW6B%400jh@localhost:27017/",
+    "ConnectionString": "mongodb://admin:admin123@localhost:27017",
     "DatabaseName": "mydb",
     "CollectionName": "entities"
   },
   "SQLServerSettings": {
-    "ConnectionString": "Server=localhost,1433;Database=mydb;User Id=sa;Password=4xFW6B@0jh;TrustServerCertificate=True;"
+    "ConnectionString": "Server=localhost,1433;Database=mydb;User Id=sa;Password=SqlPassword2026!;TrustServerCertificate=True;"
   },
   "Authentication": {
     "Jwt": {
@@ -777,11 +859,13 @@ public static class DependencyInjection
 ```
 
 ### 4. appsettings.Development.json
+Debes tener cuidado para que la misma contraseña y usuario que tienes en appsettings.json 
+sean las mismas aca, de lo contrario dara error.
 
 ```json
 {
   "SQLServerSettings": {
-    "ConnectionString": "Server=localhost,1433;Database=mydb_dev;User Id=sa;Password=4xFW6B@0jh;TrustServerCertificate=True;"
+    "ConnectionString": "Server=localhost,1433;Database=mydb;User Id=sa;Password=SqlPassword2026!;TrustServerCertificate=True;"
   }
 }
 ```
@@ -795,14 +879,10 @@ public static class DependencyInjection
 dotnet tool install --global dotnet-ef
 
 # Crear migración inicial
-dotnet ef migrations add InitialIdentityCreate \
-    --project src/DDDExample.API/DDDExample.API.csproj \
-    --startup-project src/DDDExample.API/DDDExample.API.csproj
+dotnet ef migrations add InitialIdentityCreate --project src/Infrastructure/DDDExample.Infrastructure.csproj --startup-project src/DDDExample.API/DDDExample.API.csproj
 
 # Aplicar migración
-dotnet ef database update \
-    --project src/DDDExample.API/DDDExample.API.csproj \
-    --startup-project src/DDDExample.API/DDDExample.API.csproj
+dotnet ef database update --project src/Infrastructure/DDDExample.Infrastructure.csproj --startup-project src/DDDExample.API/DDDExample.API.csproj
 ```
 
 
