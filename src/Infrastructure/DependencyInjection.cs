@@ -9,6 +9,9 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using DDDExample.Application.Common;
+using Microsoft.AspNetCore.Identity;
+using DDDExample.Domain.Entities;
 
 namespace DDDExample.Infrastructure;
 
@@ -27,7 +30,11 @@ public static class DependencyInjection
             options.UseSqlServer(
                 sqlServerSettings.ConnectionString,
                 b => b.MigrationsAssembly(typeof(ApplicationDbContext).Assembly.FullName)));
-        
+
+        services.AddIdentity<ApplicationUser, ApplicationRole>()
+        .AddEntityFrameworkStores<ApplicationDbContext>()
+        .AddDefaultTokenProviders();
+
         // Register SQL Server Product Repository
         services.AddScoped<IRepository<Domain.Entities.Product, Guid>, SqlProductRepository>();
 
@@ -42,6 +49,13 @@ public static class DependencyInjection
         // Register MongoDB Category Repository
         services.AddScoped<IRepository<Domain.Entities.Category, string>>(sp =>
             new MongoCategoryRepository(sp.GetRequiredService<MongoDbContext>()));
+
+        // Configure JWT settings
+        var jwtSettings = configuration.GetSection("Authentication:Jwt").Get<JwtSettings>();
+        if (jwtSettings != null)
+        {
+            services.Configure<JwtSettings>(configuration.GetSection("Authentication:Jwt"));
+        }
 
         return services;
     }
