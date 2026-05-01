@@ -20,9 +20,46 @@ public class AuthController : ControllerBase
     public async Task<ActionResult<LoginResponse>> Login([FromBody] LoginRequest request)
     {
         var result = await _authService.LoginAsync(request);
-        if (result == null)
+
+        if (result.RequiresMfa)
+        {
+            return Ok(new LoginResponse
+            {
+                RequiresMfa = true,
+                MfaToken = result.MfaToken,
+                User = result.User
+            });
+        }
+
+        if (string.IsNullOrEmpty(result.Token))
         {
             return Unauthorized(new { message = "Invalid email or password" });
+        }
+
+        return Ok(result);
+    }
+
+    [HttpPost("verify-mfa")]
+    public async Task<ActionResult<LoginResponse>> VerifyMfa([FromBody] MfaVerifyRequest request)
+    {
+        var result = await _authService.VerifyMfaAsync(request);
+
+        if (string.IsNullOrEmpty(result.Token))
+        {
+            return BadRequest(new { message = "Invalid MFA code" });
+        }
+
+        return Ok(result);
+    }
+
+    [HttpPost("refresh")]
+    public async Task<ActionResult<LoginResponse>> RefreshToken([FromBody] RefreshTokenRequest request)
+    {
+        var result = await _authService.RefreshTokenAsync(request);
+
+        if (string.IsNullOrEmpty(result.Token))
+        {
+            return BadRequest(new { message = "Invalid refresh token" });
         }
 
         return Ok(result);
@@ -58,5 +95,19 @@ public class AuthController : ControllerBase
             FullName = User.FindFirst(System.Security.Claims.ClaimTypes.Name)?.Value ?? string.Empty,
             CreatedAt = DateTime.UtcNow
         });
+    }
+
+    [HttpPost("logout")]
+    [Authorize]
+    public async Task<IActionResult> Logout()
+    {
+        var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrEmpty(userId))
+        {
+            return Unauthorized();
+        }
+
+        await _authService.RevokeUserTokensAsync(Guid.Parse(userId));
+        return Ok(new { message = "Logged out successfully" });
     }
 }

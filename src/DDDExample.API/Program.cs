@@ -1,6 +1,6 @@
 using DDDExample.Application.Interfaces;
-using DDDExample.Application.Mappings;
 using DDDExample.Application.Services;
+using DDDExample.Application.Mappings;
 using DDDExample.Infrastructure;
 using DDDExample.Infrastructure.Persistence.SqlServer;
 using Microsoft.EntityFrameworkCore;
@@ -10,6 +10,10 @@ using System.Text.Json.Serialization;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using System;
+using System.IO;
+using Microsoft.AspNetCore.DataProtection;
+using DDDExample.Infrastructure.Services;
+using DDDExample.Infrastructure.Configuration;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -41,6 +45,12 @@ builder.Services.AddSwaggerGen(options =>
     }
 });
 
+// Data Protection para refresh tokens
+builder.Services.AddDataProtection()
+    .PersistKeysToFileSystem(new DirectoryInfo("keys"))
+    .SetApplicationName("DDDExample");
+
+
 // Add AutoMapper
 builder.Services.AddAutoMapper(typeof(MappingProfile));
 
@@ -52,6 +62,12 @@ builder.Services.AddScoped<IProductService, ProductService>();
 builder.Services.AddScoped<ICategoryService, CategoryService>();
 builder.Services.AddScoped<ITokenService, JwtTokenService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
+
+// Register services
+builder.Services.AddScoped<ITokenService, JwtTokenService>();
+builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<IMfaService, TotpMfaService>();
+builder.Services.AddScoped<IRefreshTokenService, RefreshTokenService>();
 
 var app = builder.Build();
 

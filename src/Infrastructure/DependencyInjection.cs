@@ -1,5 +1,5 @@
+using DDDExample.Infrastructure.Services;
 using DDDExample.Application.Interfaces;
-using DDDExample.Application.Services;
 using DDDExample.Domain.Repositories;
 using DDDExample.Infrastructure.Persistence.MongoDB;
 using DDDExample.Infrastructure.Persistence.SqlServer;
@@ -37,6 +37,10 @@ public static class DependencyInjection
 
         // Register SQL Server Product Repository
         services.AddScoped<IRepository<Domain.Entities.Product, Guid>, SqlProductRepository>();
+        services.AddScoped<IAuthService, AuthService>();
+        services.AddScoped<ITokenService, JwtTokenService>();
+        services.AddScoped<IRefreshTokenService, RefreshTokenService>();
+        services.AddScoped<IMfaService, TotpMfaService>();
 
         // Configure MongoDB settings
         var mongoDbSettings = configuration.GetSection("MongoDBSettings").Get<MongoDbSettings>()
