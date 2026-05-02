@@ -18,32 +18,9 @@ using DDDExample.Infrastructure.Configuration;
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
-builder.Services.AddControllers()
-    .AddJsonOptions(options =>
-    {
-        options.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
-        options.JsonSerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
-    });
-
-// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
+builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen(options =>
-{
-    options.SwaggerDoc("v1", new OpenApiInfo
-    {
-        Title = "DDD Example API",
-        Version = "v1",
-        Description = "A clean architecture example with DDD"
-    });
-    
-    var xmlFile = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
-    var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
-    
-    if (File.Exists(xmlPath))
-    {
-        options.IncludeXmlComments(xmlPath);
-    }
-});
+builder.Services.AddSwaggerGen();
 
 // Data Protection para refresh tokens
 builder.Services.AddDataProtection()
@@ -56,12 +33,11 @@ builder.Services.AddAutoMapper(typeof(MappingProfile));
 
 // Add infrastructure services
 builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.AddJwtMfaAuthentication(builder.Configuration);
 
 // Register application services
 builder.Services.AddScoped<IProductService, ProductService>();
 builder.Services.AddScoped<ICategoryService, CategoryService>();
-builder.Services.AddScoped<ITokenService, JwtTokenService>();
-builder.Services.AddScoped<IAuthService, AuthService>();
 
 // Register services
 builder.Services.AddScoped<ITokenService, JwtTokenService>();

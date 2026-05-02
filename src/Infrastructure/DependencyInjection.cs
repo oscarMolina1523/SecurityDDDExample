@@ -31,16 +31,9 @@ public static class DependencyInjection
                 sqlServerSettings.ConnectionString,
                 b => b.MigrationsAssembly(typeof(ApplicationDbContext).Assembly.FullName)));
 
-        services.AddIdentity<ApplicationUser, ApplicationRole>()
-        .AddEntityFrameworkStores<ApplicationDbContext>()
-        .AddDefaultTokenProviders();
 
         // Register SQL Server Product Repository
         services.AddScoped<IRepository<Domain.Entities.Product, Guid>, SqlProductRepository>();
-        services.AddScoped<IAuthService, AuthService>();
-        services.AddScoped<ITokenService, JwtTokenService>();
-        services.AddScoped<IRefreshTokenService, RefreshTokenService>();
-        services.AddScoped<IMfaService, TotpMfaService>();
 
         // Configure MongoDB settings
         var mongoDbSettings = configuration.GetSection("MongoDBSettings").Get<MongoDbSettings>()
