@@ -120,13 +120,3 @@ public class MfaController : ControllerBase
     }
 }
 
-public class EnableMfaRequest
-{
-    public string VerificationCode { get; set; } = string.Empty;
-}
-
-public class DisableMfaRequest
-{
-    public string Password { get; set; } = string.Empty;
-    public string VerificationCode { get; set; } = string.Empty;
-}

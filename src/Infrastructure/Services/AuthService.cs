@@ -11,6 +11,8 @@ using System.Security.Claims;
 using System.Text;
 using Microsoft.IdentityModel.Tokens;
 using System.Text.Json;
+using OtpNet;
+using QRCoder;
 
 namespace DDDExample.Infrastructure.Services;
 
@@ -118,6 +120,47 @@ public class AuthService : IAuthService
                 FullName = user.FullName,
                 CreatedAt = user.CreatedAt
             }
+        };
+    }
+
+    public async Task<MfaSetupResponse> SetupMfaAsync(Guid userId, MfaSetupRequest request)
+    {
+        var user = await _userManager.FindByIdAsync(userId.ToString());
+
+        if (user == null)
+            throw new Exception("User not found");
+
+        var validPassword = await _userManager.CheckPasswordAsync(user, request.Password);
+
+        if (!validPassword)
+            throw new Exception("Invalid password");
+
+        var secretBytes = KeyGeneration.GenerateRandomKey(20);
+        var secret = Base32Encoding.ToString(secretBytes);
+
+        var backupCodes = Enumerable.Range(0, 8)
+            .Select(_ => Guid.NewGuid().ToString("N")[..8].ToUpper())
+            .ToList();
+
+        user.MfaSecret = secret;
+        user.BackupCodes = JsonSerializer.Serialize(backupCodes);
+
+        await _userManager.UpdateAsync(user);
+
+        var issuer = "DDDExample";
+        var otpUri = $"otpauth://totp/{issuer}:{user.Email}?secret={secret}&issuer={issuer}";
+
+        using var qrGenerator = new QRCodeGenerator();
+        using var qrCodeData = qrGenerator.CreateQrCode(otpUri, QRCodeGenerator.ECCLevel.Q);
+        var qrCode = new PngByteQRCode(qrCodeData);
+        var qrBytes = qrCode.GetGraphic(20);
+
+        return new MfaSetupResponse
+        {
+            Secret = secret,
+            ManualEntryKey = secret,
+            BackupCodes = backupCodes,
+            QrCode = Convert.ToBase64String(qrBytes)
         };
     }
 
@@ -250,5 +293,48 @@ public class AuthService : IAuthService
                 MfaEnabled = true
             }
         });
+    }
+
+    public async Task<bool> EnableMfaAsync(Guid userId, string code)
+    {
+        var user = await _userManager.FindByIdAsync(userId.ToString());
+
+        if (user == null || string.IsNullOrEmpty(user.MfaSecret))
+            return false;
+
+        var totp = new Totp(Base32Encoding.ToBytes(user.MfaSecret));
+
+        var isValid = totp.VerifyTotp(
+            code,
+            out _,
+            new VerificationWindow(previous: 2, future: 2)
+        );
+
+        if (!isValid)
+            return false;
+
+        user.MfaEnabled = true;
+        user.MfaSetupCompleted = DateTime.UtcNow;
+
+        var result = await _userManager.UpdateAsync(user);
+
+        return result.Succeeded;
+    }
+
+    public async Task<bool> DisableMfaAsync(Guid userId)
+    {
+        var user = await _userManager.FindByIdAsync(userId.ToString());
+
+        if (user == null)
+            return false;
+
+        user.MfaEnabled = false;
+        user.MfaSecret = null;
+        user.BackupCodes = null;
+        user.MfaSetupCompleted = null;
+
+        var result = await _userManager.UpdateAsync(user);
+
+        return result.Succeeded;
     }
 }
