@@ -13,8 +13,11 @@ using Microsoft.IdentityModel.Tokens;
 using System.Text.Json;
 using OtpNet;
 using QRCoder;
+using Microsoft.Extensions.Logging;
+
 
 namespace DDDExample.Infrastructure.Services;
+
 
 public class AuthService : IAuthService
 {
@@ -22,17 +25,20 @@ public class AuthService : IAuthService
     private readonly ITokenService _tokenService;
     private readonly IRefreshTokenService _refreshTokenService;
     private readonly ApplicationDbContext _context;
+    private readonly ILogger<AuthService> _logger;
+    private readonly byte[] _mfaTokenKey = Encoding.UTF8.GetBytes("THIS_IS_MY_SUPER_SECURE_TEMP_MFA_SECRET_KEY_2026_123456");
 
     public AuthService(
         UserManager<ApplicationUser> userManager,
         ITokenService tokenService,
         IRefreshTokenService refreshTokenService,
-        ApplicationDbContext context)
+        ApplicationDbContext context, ILogger<AuthService> logger)
     {
         _userManager = userManager;
         _tokenService = tokenService;
         _refreshTokenService = refreshTokenService;
         _context = context;
+        _logger = logger;
     }
 
     public async Task<LoginResponse?> LoginAsync(LoginRequest request)
@@ -168,16 +174,15 @@ public class AuthService : IAuthService
     {
         // Generar token temporal para MFA (válido por 5 minutos)
         var tokenHandler = new JwtSecurityTokenHandler();
-        var key = Encoding.ASCII.GetBytes("temporary-mfa-secret-key-32-chars");
         var tokenDescriptor = new SecurityTokenDescriptor
         {
             Subject = new ClaimsIdentity(new[]
             {
-                new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
+                new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
                 new Claim("mfa-challenge", "true")
             }),
             Expires = DateTime.UtcNow.AddMinutes(5),
-            SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature)
+            SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(_mfaTokenKey), SecurityAlgorithms.HmacSha256Signature)
         };
 
         var token = tokenHandler.CreateToken(tokenDescriptor);
@@ -189,22 +194,38 @@ public class AuthService : IAuthService
         try
         {
             var tokenHandler = new JwtSecurityTokenHandler();
-            var key = Encoding.ASCII.GetBytes("temporary-mfa-secret-key-32-chars");
+
             tokenHandler.ValidateToken(mfaToken, new TokenValidationParameters
             {
                 ValidateIssuerSigningKey = true,
-                IssuerSigningKey = new SymmetricSecurityKey(key),
+                IssuerSigningKey = new SymmetricSecurityKey(_mfaTokenKey),
                 ValidateIssuer = false,
                 ValidateAudience = false,
+                ValidateLifetime = true,
                 ClockSkew = TimeSpan.Zero
             }, out SecurityToken validatedToken);
 
             var jwtToken = (JwtSecurityToken)validatedToken;
-            var userId = jwtToken.Claims.First(x => x.Type == ClaimTypes.NameIdentifier).Value;
-            return Guid.Parse(userId);
+
+            var userIdClaim = jwtToken.Claims.FirstOrDefault(c =>
+                c.Type == ClaimTypes.NameIdentifier ||
+                c.Type == "nameid" ||
+                c.Type == JwtRegisteredClaimNames.Sub
+            );
+
+            if (userIdClaim == null)
+            {
+                _logger.LogError("No user identifier claim found in MFA token.");
+                return null;
+            }
+
+            _logger.LogInformation("Found user claim type: {Type}", userIdClaim.Type);
+
+            return Guid.Parse(userIdClaim.Value);
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.LogError(ex, "MFA token validation exception.");
             return null;
         }
     }
@@ -253,46 +274,177 @@ public class AuthService : IAuthService
         await _refreshTokenService.RevokeAllUserTokensAsync(userId);
     }
 
+    // REEMPLAZA VerifyMfaAsync COMPLETO POR ESTA VERSIÓN COMPATIBLE CON TU DTO ACTUAL
     public async Task<LoginResponse> VerifyMfaAsync(MfaVerifyRequest request)
     {
-        // Implementar lógica 
-        return await Task.FromResult(new LoginResponse
+        _logger.LogInformation("===== MFA VERIFY START =====");
+        _logger.LogInformation("Incoming MFA Token: {Token}", request.MfaToken);
+        _logger.LogInformation("Incoming MFA Code Raw: {Code}", request.Code);
+
+        var userId = ValidateMfaToken(request.MfaToken);
+
+        if (!userId.HasValue)
         {
-            Token = "static-jwt-token",
-            RefreshToken = "static-refresh-token",
+            _logger.LogWarning("MFA token validation failed.");
+            return new LoginResponse { RequiresMfa = false };
+        }
+
+        _logger.LogInformation("Validated UserId from MFA Token: {UserId}", userId.Value);
+
+        var user = await _userManager.FindByIdAsync(userId.Value.ToString());
+
+        if (user == null)
+        {
+            _logger.LogWarning("User not found.");
+            return new LoginResponse { RequiresMfa = false };
+        }
+
+        _logger.LogInformation("User found: {Email}", user.Email);
+        _logger.LogInformation("MfaEnabled: {Enabled}", user.MfaEnabled);
+        _logger.LogInformation("Stored Secret: {Secret}", user.MfaSecret);
+
+        if (string.IsNullOrEmpty(user.MfaSecret))
+        {
+            _logger.LogWarning("User has no MFA secret.");
+            return new LoginResponse { RequiresMfa = false };
+        }
+
+        var cleanedCode = request.Code.Replace(" ", "").Trim();
+
+        _logger.LogInformation("Cleaned MFA Code: {Code}", cleanedCode);
+        _logger.LogInformation("Server UTC Time: {UtcNow}", DateTime.UtcNow);
+
+        try
+        {
+            var secretBytes = Base32Encoding.ToBytes(user.MfaSecret);
+
+            _logger.LogInformation("Secret bytes length: {Length}", secretBytes.Length);
+
+            var totp = new Totp(secretBytes);
+
+            var currentCode = totp.ComputeTotp(DateTime.UtcNow);
+            var prevCode = totp.ComputeTotp(DateTime.UtcNow.AddSeconds(-30));
+            var nextCode = totp.ComputeTotp(DateTime.UtcNow.AddSeconds(30));
+
+            _logger.LogInformation("Expected Current TOTP: {Current}", currentCode);
+            _logger.LogInformation("Expected Previous TOTP: {Previous}", prevCode);
+            _logger.LogInformation("Expected Next TOTP: {Next}", nextCode);
+
+            var isValid = totp.VerifyTotp(
+                cleanedCode,
+                out long matchedStep,
+                new VerificationWindow(previous: 5, future: 5)
+            );
+
+            _logger.LogInformation("TOTP Validation Result: {Valid}", isValid);
+            _logger.LogInformation("Matched Time Step: {Step}", matchedStep);
+
+            if (!isValid)
+            {
+                _logger.LogWarning("MFA code invalid.");
+                return new LoginResponse
+                {
+                    RequiresMfa = false
+                };
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Exception during MFA verification.");
+            return new LoginResponse
+            {
+                RequiresMfa = false
+            };
+        }
+
+        if (request.RememberDevice)
+        {
+            _logger.LogInformation("Remember device enabled.");
+            await RememberDeviceAsync(user.Id);
+        }
+
+        var jwtToken = _tokenService.GenerateToken(user);
+        var refreshToken = await _refreshTokenService.GenerateRefreshTokenAsync(user.Id);
+
+        _logger.LogInformation("MFA verification successful.");
+        _logger.LogInformation("===== MFA VERIFY END =====");
+
+        return new LoginResponse
+        {
+            Token = jwtToken,
+            RefreshToken = refreshToken,
             ExpiresAt = DateTime.UtcNow.AddMinutes(15),
             RequiresMfa = false,
             MfaToken = null,
             User = new UserDto
             {
-                Id = Guid.NewGuid(),
-                Email = "mfauser@example.com",
-                FullName = "MFA Verified User",
-                CreatedAt = DateTime.UtcNow,
-                MfaEnabled = true
+                Id = user.Id,
+                Email = user.Email!,
+                FullName = user.FullName,
+                CreatedAt = user.CreatedAt,
+                MfaEnabled = user.MfaEnabled
             }
-        });
+        };
     }
+
+    // REEMPLAZA SOLO TU MÉTODO RefreshTokenAsync POR ESTE
+    // Compatible con tu DTO real y tus interfaces actuales
 
     public async Task<LoginResponse> RefreshTokenAsync(RefreshTokenRequest request)
     {
-        // Implementar lógica 
-        return await Task.FromResult(new LoginResponse
+        // Validar refresh token (tu servicio devuelve bool)
+        var isValid = await _refreshTokenService.ValidateRefreshTokenAsync(request.RefreshToken);
+
+        if (!isValid)
         {
-            Token = "static-jwt-token",
-            RefreshToken = "static-refresh-token",
+            return new LoginResponse
+            {
+                RequiresMfa = false
+            };
+        }
+
+        // Buscar el refresh token real en base de datos
+        var storedToken = await _context.RefreshTokens
+            .Include(rt => rt.User)
+            .FirstOrDefaultAsync(rt =>
+                rt.Token == request.RefreshToken &&
+                !rt.IsRevoked &&
+                rt.ExpiresAt > DateTime.UtcNow
+            );
+
+        if (storedToken == null || storedToken.User == null)
+        {
+            return new LoginResponse
+            {
+                RequiresMfa = false
+            };
+        }
+
+        var user = storedToken.User;
+
+        // Revocar tokens anteriores
+        await _refreshTokenService.RevokeAllUserTokensAsync(user.Id);
+
+        // Generar nuevos tokens
+        var newJwtToken = _tokenService.GenerateToken(user);
+        var newRefreshToken = await _refreshTokenService.GenerateRefreshTokenAsync(user.Id);
+
+        return new LoginResponse
+        {
+            Token = newJwtToken,
+            RefreshToken = newRefreshToken,
             ExpiresAt = DateTime.UtcNow.AddMinutes(15),
             RequiresMfa = false,
             MfaToken = null,
             User = new UserDto
             {
-                Id = Guid.NewGuid(),
-                Email = "mfauser@example.com",
-                FullName = "MFA Verified User",
-                CreatedAt = DateTime.UtcNow,
-                MfaEnabled = true
+                Id = user.Id,
+                Email = user.Email!,
+                FullName = user.FullName,
+                CreatedAt = user.CreatedAt,
+                MfaEnabled = user.MfaEnabled
             }
-        });
+        };
     }
 
     public async Task<bool> EnableMfaAsync(Guid userId, string code)
