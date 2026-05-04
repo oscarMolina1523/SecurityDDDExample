@@ -1,5 +1,5 @@
+using DDDExample.Infrastructure.Services;
 using DDDExample.Application.Interfaces;
-using DDDExample.Application.Services;
 using DDDExample.Domain.Repositories;
 using DDDExample.Infrastructure.Persistence.MongoDB;
 using DDDExample.Infrastructure.Persistence.SqlServer;
@@ -31,9 +31,6 @@ public static class DependencyInjection
                 sqlServerSettings.ConnectionString,
                 b => b.MigrationsAssembly(typeof(ApplicationDbContext).Assembly.FullName)));
 
-        services.AddIdentity<ApplicationUser, ApplicationRole>()
-        .AddEntityFrameworkStores<ApplicationDbContext>()
-        .AddDefaultTokenProviders();
 
         // Register SQL Server Product Repository
         services.AddScoped<IRepository<Domain.Entities.Product, Guid>, SqlProductRepository>();

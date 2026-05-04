@@ -1,14 +1,16 @@
-using DDDExample.Application.Interfaces;
-using DDDExample.Domain.Entities;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
+using DDDExample.Infrastructure.Persistence.SqlServer;
+using DDDExample.Infrastructure.Configuration;
+using Microsoft.EntityFrameworkCore;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using DDDExample.Application.Common; 
 using DDDExample.Domain.Entities;
+using DDDExample.Application.Interfaces;
 
-namespace DDDExample.Application.Services;
+namespace DDDExample.Infrastructure.Services;
 
 public class JwtTokenService : ITokenService
 {

@@ -45,7 +45,7 @@ public class ProductService : IProductService
 
     public async Task UpdateAsync(Guid id, UpdateProductDto dto, CancellationToken cancellationToken = default)
     {
-        var product = await _repository.GetByIdAsync(id, cancellationToken) 
+        var product = await _repository.GetByIdAsync(id, cancellationToken)
             ?? throw new KeyNotFoundException($"Product with ID {id} not found.");
 
         product.Update(dto.Name, dto.Description, dto.Price, dto.CategoryId);
@@ -54,7 +54,7 @@ public class ProductService : IProductService
 
     public async Task DeleteAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        var product = await _repository.GetByIdAsync(id, cancellationToken) 
+        var product = await _repository.GetByIdAsync(id, cancellationToken)
             ?? throw new KeyNotFoundException($"Product with ID {id} not found.");
 
         await _repository.DeleteAsync(product, cancellationToken);
@@ -62,7 +62,7 @@ public class ProductService : IProductService
 
     public async Task UpdateStockAsync(Guid id, UpdateProductStockDto dto, CancellationToken cancellationToken = default)
     {
-        var product = await _repository.GetByIdAsync(id, cancellationToken) 
+        var product = await _repository.GetByIdAsync(id, cancellationToken)
             ?? throw new KeyNotFoundException($"Product with ID {id} not found.");
 
         product.UpdateStock(dto.Quantity);

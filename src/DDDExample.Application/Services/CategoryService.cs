@@ -38,7 +38,7 @@ public class CategoryService : ICategoryService
 
     public async Task UpdateAsync(string id, UpdateCategoryDto dto, CancellationToken cancellationToken = default)
     {
-        var category = await _repository.GetByIdAsync(id, cancellationToken) 
+        var category = await _repository.GetByIdAsync(id, cancellationToken)
             ?? throw new KeyNotFoundException($"Category with ID {id} not found.");
 
         category.Update(dto.Name, dto.Description);
@@ -47,7 +47,7 @@ public class CategoryService : ICategoryService
 
     public async Task ToggleStatusAsync(string id, CancellationToken cancellationToken = default)
     {
-        var category = await _repository.GetByIdAsync(id, cancellationToken) 
+        var category = await _repository.GetByIdAsync(id, cancellationToken)
             ?? throw new KeyNotFoundException($"Category with ID {id} not found.");
 
         category.ToggleStatus();
@@ -56,7 +56,7 @@ public class CategoryService : ICategoryService
 
     public async Task DeleteAsync(string id, CancellationToken cancellationToken = default)
     {
-        var category = await _repository.GetByIdAsync(id, cancellationToken) 
+        var category = await _repository.GetByIdAsync(id, cancellationToken)
             ?? throw new KeyNotFoundException($"Category with ID {id} not found.");
 
         await _repository.DeleteAsync(category, cancellationToken);
